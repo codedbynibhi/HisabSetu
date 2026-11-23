@@ -1,22 +1,12 @@
-
-
+import { formatMoney } from "./utils/formatMoney";
+import { loadData } from "./utils/storage";
+import { initialCustomers } from "./data/initialCustomers";
 import { useEffect, useState } from "react";
+import Sidebar from "./components/Sidebar";
 import "./App.css";
 
-const initialCustomers = [
-  { id: 1, name: "Aman Sharma", phone: "", balance: 1250 },
-  { id: 2, name: "Priya Verma", phone: "", balance: 800 },
-  { id: 3, name: "Rahul Singh", phone: "", balance: 2400 },
-];
 
-function loadData(key, fallback) {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch {
-    return fallback;
-  }
-}
+
 
 function App() {
   const [customers, setCustomers] = useState(() =>
@@ -36,6 +26,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [editingCustomerId, setEditingCustomerId] = useState(null);
 
   useEffect(() => {
     localStorage.setItem("hs-customers", JSON.stringify(customers));
@@ -51,10 +42,27 @@ const selectedCustomer = customers.find(
 const customerTransactions = transactions.filter(
   (transaction) => transaction.customerId === selectedCustomerId
 );
+
+const totalCredit = customerTransactions
+  .filter((transaction) => transaction.type === "credit")
+  .reduce((total, transaction) => total + transaction.amount, 0);
+
+const totalPayments = customerTransactions
+  .filter((transaction) => transaction.type === "payment")
+  .reduce((total, transaction) => total + transaction.amount, 0);
+
   const totalOutstanding = customers.reduce(
     (total, customer) => total + customer.balance,
     0
   );
+
+  const totalCreditGiven = transactions
+    .filter((transaction) => transaction.type === "credit")
+    .reduce((total, transaction) => total + transaction.amount, 0);
+
+  const totalPaymentsReceived = transactions
+    .filter((transaction) => transaction.type === "payment")
+    .reduce((total, transaction) => total + transaction.amount, 0);
 
   const today = new Date().toDateString();
 
@@ -66,11 +74,65 @@ const customerTransactions = transactions.filter(
     )
     .reduce((total, transaction) => total + transaction.amount, 0);
 
+  const monthlyCollections = Array.from({ length: 6 }, (_, i) => {
+    const date = new Date();
+    const monthDate = new Date(
+      date.getFullYear(),
+      date.getMonth() - i,
+      1
+    );
+
+    const total = transactions
+      .filter((transaction) => {
+        const transactionDate = new Date(transaction.date);
+
+        return (
+          transaction.type === "payment" &&
+          transactionDate.getMonth() === monthDate.getMonth() &&
+          transactionDate.getFullYear() === monthDate.getFullYear()
+        );
+      })
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+    return {
+      month: monthDate.toLocaleDateString("en-IN", {
+        month: "short",
+        year: "numeric",
+      }),
+      total,
+    };
+  }).reverse();
+
+  const maxMonthlyCollection = Math.max(
+    ...monthlyCollections.map((item) => item.total),
+    1
+  );
+
   function addCustomer(event) {
     event.preventDefault();
 
     if (!name.trim()) {
       setMessage("Please enter a customer name.");
+      return;
+    }
+
+    if (editingCustomerId !== null) {
+      setCustomers((previous) =>
+        previous.map((customer) =>
+          customer.id === editingCustomerId
+            ? {
+                ...customer,
+                name: name.trim(),
+                phone: phone.trim(),
+              }
+            : customer
+        )
+      );
+
+      setEditingCustomerId(null);
+      setName("");
+      setPhone("");
+      setMessage("Customer updated successfully!");
       return;
     }
 
@@ -86,6 +148,46 @@ const customerTransactions = transactions.filter(
     setName("");
     setPhone("");
     setMessage("Customer added successfully!");
+  }
+
+  function deleteCustomer(id) {
+    const confirmDelete = window.confirm(
+      "Are you sure? This will also delete all transactions of this customer."
+    );
+
+    if (!confirmDelete) {
+      return;
+    }
+
+    setCustomers((previous) =>
+      previous.filter((customer) => customer.id !== id)
+    );
+
+    setTransactions((previous) =>
+      previous.filter((transaction) => transaction.customerId !== id)
+    );
+
+    if (selectedCustomerId === id) {
+      setSelectedCustomerId(null);
+    }
+
+    if (editingCustomerId === id) {
+      setEditingCustomerId(null);
+      setName("");
+      setPhone("");
+    }
+
+    if (Number(customerId) === id) {
+      const remainingCustomer = customers.find(
+        (customer) => customer.id !== id
+      );
+
+      setCustomerId(
+        remainingCustomer ? String(remainingCustomer.id) : ""
+      );
+    }
+
+    setMessage("Customer deleted successfully!");
   }
 
   function recordTransaction(event) {
@@ -140,31 +242,14 @@ const customerTransactions = transactions.filter(
     setMessage("Transaction recorded successfully!");
   }
 
-  function formatMoney(value) {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 2,
-    }).format(value);
-  }
+  
 const filteredCustomers = customers.filter((customer) =>
   customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
   customer.phone.includes(searchTerm)
 );
   return (
     <div className="app">
-      <aside className="sidebar">
-        <h2>HisaabSetu</h2>
-        <p>Your business, in balance.</p>
-
-        <nav>
-          <a href="#dashboard">Dashboard</a>
-          <a href="#customers">Customers</a>
-          <a href="#transactions">Transactions</a>
-        </nav>
-
-        <div className="sidebar-footer">Simple. Clear. Reliable.</div>
-      </aside>
+       <Sidebar />
 
       <main className="main" id="dashboard">
         <header className="page-header">
@@ -202,6 +287,44 @@ const filteredCustomers = customers.filter((customer) =>
             <h2>{formatMoney(todayCollections)}</h2>
             <p>Payments recorded today</p>
           </article>
+
+          <article className="stat-card">
+            <span>Total Credit Given</span>
+            <h2>{formatMoney(totalCreditGiven)}</h2>
+            <p>Total udhaar recorded</p>
+          </article>
+
+          <article className="stat-card">
+            <span>Total Payments Received</span>
+            <h2>{formatMoney(totalPaymentsReceived)}</h2>
+            <p>Total money collected</p>
+          </article>
+        </section>
+
+        <section className="panel">
+          <h2>Monthly Collections</h2>
+          <p className="muted">
+            Payment collections over the last 6 months.
+          </p>
+
+          <div className="monthly-chart">
+            {monthlyCollections.map((item) => (
+              <div className="month-bar" key={item.month}>
+                <strong>{formatMoney(item.total)}</strong>
+
+                <div className="bar-track">
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${(item.total / maxMonthlyCollection) * 100}%`,
+                    }}
+                  />
+                </div>
+
+                <span>{item.month}</span>
+              </div>
+            ))}
+          </div>
         </section>
 
         {message && (
@@ -237,8 +360,23 @@ const filteredCustomers = customers.filter((customer) =>
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
             />
+            {editingCustomerId !== null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCustomerId(null);
+                  setName("");
+                  setPhone("");
+                }}
+              >
+                Cancel
+              </button>
+            )}
+
             <button className="primary-btn" type="submit">
-              + Add customer
+              {editingCustomerId !== null
+                ? "Update Customer"
+                : "+ Add customer"}
             </button>
           </form>
           <input
@@ -254,6 +392,7 @@ const filteredCustomers = customers.filter((customer) =>
                   <th>Customer</th>
                   <th>Phone</th>
                   <th>Outstanding</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -271,11 +410,29 @@ const filteredCustomers = customers.filter((customer) =>
                     <td className="money">
                       {formatMoney(customer.balance)}
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCustomerId(customer.id);
+                          setName(customer.name);
+                          setPhone(customer.phone);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteCustomer(customer.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {customers.length === 0 && (
                   <tr>
-                    <td colSpan="3">No customers yet. Add one above.</td>
+                    <td colSpan="4">No customers yet. Add one above.</td>
                   </tr>
                 )}
               </tbody>
@@ -352,9 +509,22 @@ const filteredCustomers = customers.filter((customer) =>
   <section className="panel">
     <h2>{selectedCustomer.name}'s Ledger</h2>
 
-    <p className="muted">
-      Outstanding: {formatMoney(selectedCustomer.balance)}
-    </p>
+    <div className="ledger-summary">
+      <div className="ledger-stat">
+        <span>Total Credit</span>
+        <strong>{formatMoney(totalCredit)}</strong>
+      </div>
+
+      <div className="ledger-stat">
+        <span>Total Payments</span>
+        <strong>{formatMoney(totalPayments)}</strong>
+      </div>
+
+      <div className="ledger-stat">
+        <span>Outstanding</span>
+        <strong>{formatMoney(selectedCustomer.balance)}</strong>
+      </div>
+    </div>
 
     {customerTransactions.length === 0 ? (
       <p>No transactions for this customer yet.</p>
