@@ -28,6 +28,9 @@ function App() {
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [editingCustomerId, setEditingCustomerId] = useState(null);
   const [editingTransactionId, setEditingTransactionId] = useState(null);
+  const [filterCustomer, setFilterCustomer] = useState("all");
+  const [filterType, setFilterType] = useState("all");
+  const [filterDate, setFilterDate] = useState("");
 
   useEffect(() => {
     localStorage.setItem("hs-customers", JSON.stringify(customers));
@@ -338,6 +341,22 @@ const totalPayments = customerTransactions
 
    setMessage("Transaction deleted successfully!");
  }
+
+ const filteredTransactions = transactions.filter((transaction) => {
+   const matchesCustomer =
+     filterCustomer === "all" ||
+     transaction.customerId === Number(filterCustomer);
+
+   const matchesType =
+     filterType === "all" ||
+     transaction.type === filterType;
+
+   const matchesDate =
+     filterDate === "" ||
+     new Date(transaction.date).toLocaleDateString("en-CA") === filterDate;
+
+   return matchesCustomer && matchesType && matchesDate;
+ });
 
 const filteredCustomers = customers.filter((customer) =>
   customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -674,13 +693,54 @@ const filteredCustomers = customers.filter((customer) =>
         <section className="panel">
           <h2>Recent transactions</h2>
 
-          {transactions.length === 0 ? (
+          <div className="transaction-filters">
+            <select
+              value={filterCustomer}
+              onChange={(event) => setFilterCustomer(event.target.value)}
+            >
+              <option value="all">All Customers</option>
+
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterType}
+              onChange={(event) => setFilterType(event.target.value)}
+            >
+              <option value="all">All Types</option>
+              <option value="credit">Credit</option>
+              <option value="payment">Payment</option>
+            </select>
+
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(event) => setFilterDate(event.target.value)}
+            />
+
+            <button
+              type="button"
+              onClick={() => {
+                setFilterCustomer("all");
+                setFilterType("all");
+                setFilterDate("");
+              }}
+            >
+              Clear Filters
+            </button>
+          </div>
+
+          {filteredTransactions.length === 0 ? (
             <p className="empty">
-              No transactions yet. Record your first transaction above.
+              No transactions found. Try changing your filters.
             </p>
           ) : (
             <div className="transaction-list">
-              {transactions.map((transaction) => (
+              {filteredTransactions.map((transaction) => (
                 <article className="transaction-row" key={transaction.id}>
                   <div>
                     <strong>{transaction.customerName}</strong>

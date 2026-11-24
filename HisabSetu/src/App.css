@@ -432,3 +432,28 @@ th {
     gap: 8px;
   }
 }
+.transaction-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.transaction-filters select,
+.transaction-filters input {
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  color: #333;
+  font-size: 14px;
+}
+
+.transaction-filters button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #eee;
+  color: #333;
+}
