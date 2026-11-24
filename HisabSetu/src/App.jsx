@@ -27,6 +27,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [editingCustomerId, setEditingCustomerId] = useState(null);
+  const [editingTransactionId, setEditingTransactionId] = useState(null);
 
   useEffect(() => {
     localStorage.setItem("hs-customers", JSON.stringify(customers));
@@ -194,11 +195,12 @@ const totalPayments = customerTransactions
     event.preventDefault();
 
     const value = Number(amount);
-    const selectedCustomer = customers.find(
+
+    const newCustomer = customers.find(
       (customer) => customer.id === Number(customerId)
     );
 
-    if (!selectedCustomer) {
+    if (!newCustomer) {
       setMessage("Please select a customer.");
       return;
     }
@@ -208,41 +210,89 @@ const totalPayments = customerTransactions
       return;
     }
 
-    if (type === "payment" && value > selectedCustomer.balance) {
+    const oldTransaction = transactions.find(
+      (transaction) => transaction.id === editingTransactionId
+    );
+
+    const oldEffect = oldTransaction
+      ? oldTransaction.type === "credit"
+        ? oldTransaction.amount
+        : -oldTransaction.amount
+      : 0;
+
+    const oldCustomer = oldTransaction
+      ? customers.find(
+          (customer) => customer.id === oldTransaction.customerId
+        )
+      : null;
+
+    const availableBalance =
+      newCustomer.balance -
+      (oldTransaction && oldTransaction.customerId === newCustomer.id
+        ? oldEffect
+        : 0);
+
+    if (type === "payment" && value > availableBalance) {
       setMessage("Payment cannot exceed the outstanding balance.");
       return;
     }
 
     const transaction = {
-      id: crypto.randomUUID(),
-      customerId: selectedCustomer.id,
-      customerName: selectedCustomer.name,
+      id: editingTransactionId || crypto.randomUUID(),
+      customerId: newCustomer.id,
+      customerName: newCustomer.name,
       type,
       amount: value,
       note: note.trim(),
-      date: new Date().toISOString(),
+      date: oldTransaction ? oldTransaction.date : new Date().toISOString(),
     };
 
+    const newEffect = type === "credit" ? value : -value;
+
     setCustomers((previous) =>
-      previous.map((customer) =>
-        customer.id === selectedCustomer.id
-          ? {
-              ...customer,
-              balance:
-                customer.balance +
-                (type === "credit" ? value : -value),
-            }
-          : customer
-      )
+      previous.map((customer) => {
+        let balanceChange = 0;
+
+        if (oldTransaction && customer.id === oldTransaction.customerId) {
+          balanceChange -= oldEffect;
+        }
+
+        if (customer.id === newCustomer.id) {
+          balanceChange += newEffect;
+        }
+
+        return balanceChange !== 0
+          ? { ...customer, balance: customer.balance + balanceChange }
+          : customer;
+      })
     );
 
-    setTransactions((previous) => [transaction, ...previous]);
+    if (editingTransactionId !== null) {
+      setTransactions((previous) =>
+        previous.map((item) =>
+          item.id === editingTransactionId ? transaction : item
+        )
+      );
+      setMessage("Transaction updated successfully!");
+    } else {
+      setTransactions((previous) => [transaction, ...previous]);
+      setMessage("Transaction recorded successfully!");
+    }
+
+    setEditingTransactionId(null);
     setAmount("");
     setNote("");
-    setMessage("Transaction recorded successfully!");
   }
 
-  
+ function editTransaction(transaction) {
+   setEditingTransactionId(transaction.id);
+   setCustomerId(String(transaction.customerId));
+   setType(transaction.type);
+   setAmount(String(transaction.amount));
+   setNote(transaction.note || "");
+   setMessage("Editing transaction. Make your changes below.");
+ }
+
 const filteredCustomers = customers.filter((customer) =>
   customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
   customer.phone.includes(searchTerm)
@@ -500,8 +550,24 @@ const filteredCustomers = customers.filter((customer) =>
               type="submit"
               disabled={customers.length === 0}
             >
-              Save transaction
+              {editingTransactionId !== null
+                ? "Update transaction"
+                : "Save transaction"}
             </button>
+
+            {editingTransactionId !== null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingTransactionId(null);
+                  setAmount("");
+                  setNote("");
+                  setMessage("");
+                }}
+              >
+                Cancel Edit
+              </button>
+            )}
           </form>
         </section>
 
@@ -577,16 +643,25 @@ const filteredCustomers = customers.filter((customer) =>
                       {new Date(transaction.date).toLocaleString("en-IN")}
                     </p>
                   </div>
-                  <strong
-                    className={
-                      transaction.type === "payment"
-                        ? "payment"
-                        : "credit"
-                    }
-                  >
-                    {transaction.type === "payment" ? "−" : "+"}
-                    {formatMoney(transaction.amount)}
-                  </strong>
+                  <div>
+                    <strong
+                      className={
+                        transaction.type === "payment"
+                          ? "payment"
+                          : "credit"
+                      }
+                    >
+                      {transaction.type === "payment" ? "−" : "+"}
+                      {formatMoney(transaction.amount)}
+                    </strong>
+
+                    <button
+                      type="button"
+                      onClick={() => editTransaction(transaction)}
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
