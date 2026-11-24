@@ -293,6 +293,52 @@ const totalPayments = customerTransactions
    setMessage("Editing transaction. Make your changes below.");
  }
 
+ function deleteTransaction(id) {
+   const confirmDelete = window.confirm(
+     "Are you sure you want to delete this transaction?"
+   );
+
+   if (!confirmDelete) {
+     return;
+   }
+
+   const transactionToDelete = transactions.find(
+     (transaction) => transaction.id === id
+   );
+
+   if (!transactionToDelete) {
+     return;
+   }
+
+   const balanceChange =
+     transactionToDelete.type === "credit"
+       ? -transactionToDelete.amount
+       : transactionToDelete.amount;
+
+   setCustomers((previous) =>
+     previous.map((customer) =>
+       customer.id === transactionToDelete.customerId
+         ? {
+             ...customer,
+             balance: customer.balance + balanceChange,
+           }
+         : customer
+     )
+   );
+
+   setTransactions((previous) =>
+     previous.filter((transaction) => transaction.id !== id)
+   );
+
+   if (editingTransactionId === id) {
+     setEditingTransactionId(null);
+     setAmount("");
+     setNote("");
+   }
+
+   setMessage("Transaction deleted successfully!");
+ }
+
 const filteredCustomers = customers.filter((customer) =>
   customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
   customer.phone.includes(searchTerm)
@@ -660,6 +706,12 @@ const filteredCustomers = customers.filter((customer) =>
                       onClick={() => editTransaction(transaction)}
                     >
                       Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteTransaction(transaction.id)}
+                    >
+                      Delete
                     </button>
                   </div>
                 </article>
